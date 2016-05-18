@@ -41,6 +41,8 @@ CONFIG_ARGS = [
     [('--rpc-batch-size',), {'type': int, 'default': config.DEFAULT_RPC_BATCH_SIZE, 'help': 'number of RPC queries by batch (default: {})'.format(config.DEFAULT_RPC_BATCH_SIZE)}],
     [('--requests-timeout',), {'type': int, 'default': config.DEFAULT_REQUESTS_TIMEOUT, 'help': 'timeout value (in seconds) used for all HTTP requests (default: 5)'}],
 
+    [('--dont-verify-storedhash',), {'action': 'store_true', 'default': False, 'help': 'skip verifying previously stored hash'}],
+    [('--dont-verify-checkpoints',), {'action': 'store_true', 'default': False, 'help': 'skip verifying checkpoints'}],
     [('--force',), {'action': 'store_true', 'default': False, 'help': 'skip backend check, version check, process lock (NOT FOR USE ON PRODUCTION SYSTEMS)'}],
     [('--database-file',), {'default': None, 'help': 'the path to the SQLite3 database file'}],
     [('--log-file',), {'default': None, 'help': 'the path to the server log file'}],
@@ -74,6 +76,8 @@ def main():
     parser_server = subparsers.add_parser('start', help='run the server')
     parser_server.add_argument('--stop-at-block-index', default=None, help='the index to stop at/before when parsing')
     parser_server.add_argument('--without-api', default=False, action='store_true', help='disable API')
+
+    parser_checkpoints = subparsers.add_parser('checkpoints', help='print checkpoints')
 
     parser_reparse = subparsers.add_parser('reparse', help='reparse all transactions in the database')
 
@@ -112,7 +116,7 @@ def main():
                 raise e
 
     # Configuration
-    COMMANDS_WITH_DB = ['reparse', 'rollback', 'kickstart', 'start']
+    COMMANDS_WITH_DB = ['reparse', 'rollback', 'kickstart', 'start', 'checkpoints']
     COMMANDS_WITH_CONFIG = ['debug_config']
     if args.action in COMMANDS_WITH_DB or args.action in COMMANDS_WITH_CONFIG:
         init_args = dict(database_file=args.database_file,
@@ -134,8 +138,8 @@ def main():
                                 force=args.force, verbose=args.verbose, console_logfilter=os.environ.get('COUNTERPARTY_LOGGING', None),
                                 p2sh_dust_return_pubkey=args.p2sh_dust_return_pubkey,
                                 utxo_locks_max_addresses=args.utxo_locks_max_addresses,
-                                utxo_locks_max_age=args.utxo_locks_max_age)
-                                #,broadcast_tx_mainnet=args.broadcast_tx_mainnet)
+                                utxo_locks_max_age=args.utxo_locks_max_age,
+                                verify_stored_hash=not args.dont_verify_storedhash, verify_checkpoints=not args.dont_verify_checkpoints)
 
     if args.action in COMMANDS_WITH_DB:
         db = init_with_catch(server.initialise, init_args)
@@ -158,6 +162,9 @@ def main():
 
     elif args.action == 'debug_config':
         server.debug_config()
+
+    elif args.action == 'checkpoints':
+        server.checkpoints(db)
 
     else:
         parser.print_help()
