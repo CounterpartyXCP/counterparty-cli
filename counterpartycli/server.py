@@ -68,6 +68,8 @@ def main():
 
     parser_server = subparsers.add_parser('start', help='run the server')
 
+    parser_checkpoints = subparsers.add_parser('checkpoints', help='print checkpoints')
+
     parser_reparse = subparsers.add_parser('reparse', help='reparse all transactions in the database')
    
     parser_rollback = subparsers.add_parser('rollback', help='rollback database')
@@ -95,7 +97,7 @@ def main():
         sys.exit()
 
     # Configuration
-    if args.action in ['reparse', 'rollback', 'kickstart', 'start']:
+    if args.action in ['reparse', 'rollback', 'kickstart', 'start', 'checkpoints']:
         try:
             db = server.initialise(database_file=args.database_file,
                                 log_file=args.log_file, api_log_file=args.api_log_file,
@@ -133,6 +135,9 @@ def main():
 
     elif args.action == 'start':
         server.start_all(db)
+
+    elif args.action == 'checkpoints':
+        server.checkpoints(db)
 
     else:
         parser.print_help()
