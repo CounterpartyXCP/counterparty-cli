@@ -39,6 +39,8 @@ CONFIG_ARGS = [
     [('--rpc-batch-size',), {'type': int, 'default': config.DEFAULT_RPC_BATCH_SIZE, 'help': 'number of RPC queries by batch (default: {})'.format(config.DEFAULT_RPC_BATCH_SIZE)}],
     [('--requests-timeout',), {'type': int, 'default': config.DEFAULT_REQUESTS_TIMEOUT, 'help': 'timeout value (in seconds) used for all HTTP requests (default: 5)'}],
 
+    [('--dont-verify-storedhash',), {'action': 'store_true', 'default': False, 'help': 'skip verifying previously stored hash'}],
+    [('--dont-verify-checkpoints',), {'action': 'store_true', 'default': False, 'help': 'skip verifying checkpoints'}],
     [('--force',), {'action': 'store_true', 'default': False, 'help': 'skip backend check, version check, process lock (NOT FOR USE ON PRODUCTION SYSTEMS)'}],
     [('--database-file',), {'default': None, 'help': 'the path to the SQLite3 database file'}],
     [('--log-file',), {'default': None, 'help': 'the path to the server log file'}],
@@ -68,6 +70,8 @@ def main():
 
     parser_server = subparsers.add_parser('start', help='run the server')
 
+    parser_checkpoints = subparsers.add_parser('checkpoints', help='print checkpoints')
+
     parser_reparse = subparsers.add_parser('reparse', help='reparse all transactions in the database')
    
     parser_rollback = subparsers.add_parser('rollback', help='rollback database')
@@ -95,7 +99,7 @@ def main():
         sys.exit()
 
     # Configuration
-    if args.action in ['reparse', 'rollback', 'kickstart', 'start']:
+    if args.action in ['reparse', 'rollback', 'kickstart', 'start', 'checkpoints']:
         try:
             db = server.initialise(database_file=args.database_file,
                                 log_file=args.log_file, api_log_file=args.api_log_file,
@@ -113,7 +117,8 @@ def main():
                                 requests_timeout=args.requests_timeout,
                                 rpc_batch_size=args.rpc_batch_size,
                                 check_asset_conservation=not args.no_check_asset_conservation,
-                                force=args.force, verbose=args.verbose, console_logfilter=os.environ.get('COUNTERPARTY_LOGGING', None))
+                                force=args.force, verbose=args.verbose, console_logfilter=os.environ.get('COUNTERPARTY_LOGGING', None),
+                                verify_stored_hash=not args.dont_verify_storedhash, verify_checkpoints=not args.dont_verify_checkpoints)
                                 #,broadcast_tx_mainnet=args.broadcast_tx_mainnet)
         except TypeError as e:
             if 'unexpected keyword argument' in str(e):
@@ -133,6 +138,9 @@ def main():
 
     elif args.action == 'start':
         server.start_all(db)
+
+    elif args.action == 'checkpoints':
+        server.checkpoints(db)
 
     else:
         parser.print_help()
