@@ -40,6 +40,7 @@ CONFIG_ARGS = [
     [('--requests-timeout',), {'type': int, 'default': config.DEFAULT_REQUESTS_TIMEOUT, 'help': 'timeout value (in seconds) used for all HTTP requests (default: 5)'}],
 
     [('--force',), {'action': 'store_true', 'default': False, 'help': 'skip backend check, version check, process lock (NOT FOR USE ON PRODUCTION SYSTEMS)'}],
+    [('--dont-sync-mempool',), {'action': 'store_true', 'default': False, 'help': 'skip syncing mempool, saves a lot of memory but no 0conf TX info'}],
     [('--database-file',), {'default': None, 'help': 'the path to the SQLite3 database file'}],
     [('--log-file',), {'default': None, 'help': 'the path to the server log file'}],
     [('--api-log-file',), {'default': None, 'help': 'the path to the API log file'}]
@@ -113,7 +114,8 @@ def main():
                                 requests_timeout=args.requests_timeout,
                                 rpc_batch_size=args.rpc_batch_size,
                                 check_asset_conservation=not args.no_check_asset_conservation,
-                                force=args.force, verbose=args.verbose, console_logfilter=os.environ.get('COUNTERPARTY_LOGGING', None))
+                                force=args.force, verbose=args.verbose, console_logfilter=os.environ.get('COUNTERPARTY_LOGGING', None),
+                                sync_mempool=not args.dont_sync_mempool)
                                 #,broadcast_tx_mainnet=args.broadcast_tx_mainnet)
         except TypeError as e:
             if 'unexpected keyword argument' in str(e):
