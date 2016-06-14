@@ -185,6 +185,9 @@ def main():
     parser_getrows.add_argument('--limit', help='number of rows to return', default=100)
     parser_getrows.add_argument('--offset', help='number of rows to skip', default=0)
 
+    execution_info = subparsers.add_parser('execution_info', help='get info about EVM execution TX')
+    execution_info.add_argument('tx_hash', help='tx_hash of the TX')
+
     parser_getrunninginfo = subparsers.add_parser('getinfo', help='get the current state of the server')
 
     args = parser.parse_args()
@@ -236,6 +239,9 @@ def main():
                 tx_hash = wallet.send_raw_transaction(signed_tx_hex)
                 logger.info('Hash of transaction (broadcasted): {}'.format(tx_hash))
 
+    elif args.action == 'execution_info':
+        result = util.api('execution_info', {'tx_hash': args.tx_hash})
+        util.json_print(result)
 
     # VIEWING
     elif args.action in ['balances', 'asset', 'wallet', 'pending', 'getinfo', 'getrows']:

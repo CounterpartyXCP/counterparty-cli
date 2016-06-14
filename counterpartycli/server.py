@@ -72,6 +72,8 @@ def main():
     subparsers = parser.add_subparsers(dest='action', help='the action to be taken')
 
     parser_server = subparsers.add_parser('start', help='run the server')
+    parser_server.add_argument('--stop-at-block-index', default=None, help='the index to stop at/before when parsing')
+    parser_server.add_argument('--without-api', default=False, action='store_true', help='disable API')
 
     parser_reparse = subparsers.add_parser('reparse', help='reparse all transactions in the database')
 
@@ -152,7 +154,7 @@ def main():
         server.kickstart(db, bitcoind_dir=args.bitcoind_dir)
 
     elif args.action == 'start':
-        server.start_all(db)
+        server.start_all(db, stop_at_block_index=args.stop_at_block_index, with_api=not args.without_api)
 
     elif args.action == 'debug_config':
         server.debug_config()
