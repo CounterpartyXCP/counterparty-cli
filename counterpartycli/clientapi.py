@@ -194,7 +194,7 @@ def call(method, args, pubkey_resolver=None):
             for address_name in ['source', 'destination']:
                 if address_name in args:
                     address = args[address_name]
-                    if script.is_multisig(address) or address_name != 'destination':    # We don’t need the pubkey for a mono‐sig destination.
+                    if not script.is_p2sh(address) and (script.is_multisig(address) or address_name != 'destination'):    # We don’t need the pubkey for a mono‐sig destination.
                         pubkeys += get_pubkeys(address, pubkey_resolver=pubkey_resolver)
             args['pubkey'] = pubkeys
 
