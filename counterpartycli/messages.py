@@ -183,11 +183,6 @@ def prepare_args(args, action):
     if action == 'burn':
         args.quantity = util.value_in(args.quantity, config.BTC)
 
-    # execute
-    if action == 'execute':
-        args.value = util.value_in(args.value, 'XCP')
-        args.startgas = util.value_in(args.startgas, 'XCP')
-
     # destroy
     if action == 'destroy':
         args.quantity = util.value_in(args.quantity, args.asset, 'input')

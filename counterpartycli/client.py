@@ -141,18 +141,18 @@ def main():
 
     parser_publish = subparsers.add_parser('publish', help='publish contract code in the blockchain')
     parser_publish.add_argument('--source', required=True, help='the source address')
-    parser_publish.add_argument('--gasprice', required=True, type=int, help='the price of gas')
-    parser_publish.add_argument('--startgas', required=True, type=int, help='the maximum quantity of {} to be used to pay for the execution (satoshis)'.format(config.XCP))
-    parser_publish.add_argument('--endowment', required=True, type=int, help='quantity of {} to be transfered to the contract (satoshis)'.format(config.XCP))
+    parser_publish.add_argument('--gasprice', default=1, type=int, help='the price of gas')
+    parser_publish.add_argument('--startgas', required=True, type=int, help='the maximum quantity of {} to be used to pay for the execution (XCPshis)'.format(config.XCP))
+    parser_publish.add_argument('--endowment', default=0, type=int, help='quantity of {} to be transfered to the contract (XCPshis)'.format(config.XCP))
     parser_publish.add_argument('--code-hex', required=True, type=str, help='the hex‐encoded contract (returned by `serpent compile`)')
     parser_publish.add_argument('--fee', help='the exact {} fee to be paid to miners'.format(config.BTC))
 
     parser_execute = subparsers.add_parser('execute', help='execute contract code in the blockchain')
     parser_execute.add_argument('--source', required=True, help='the source address')
     parser_execute.add_argument('--contract-id', required=True, help='the contract ID of the contract to be executed')
-    parser_execute.add_argument('--gasprice', required=True, type=int, help='the price of gas')
-    parser_execute.add_argument('--startgas', required=True, type=int, help='the maximum quantity of {} to be used to pay for the execution (satoshis)'.format(config.XCP))
-    parser_execute.add_argument('--value', required=True, type=int, help='quantity of {} to be transfered to the contract (satoshis)'.format(config.XCP))
+    parser_execute.add_argument('--gasprice', default=1, type=int, help='the price of gas')
+    parser_execute.add_argument('--startgas', required=True, type=int, help='the maximum quantity of {} to be used to pay for the execution (XCPshis)'.format(config.XCP))
+    parser_execute.add_argument('--value', default=0, type=int, help='quantity of {} to be transfered to the contract (XCPshis)'.format(config.XCP))
     parser_execute.add_argument('--payload-hex', required=True, type=str, help='data to be provided to the contract (returned by `serpent encode_datalist`)')
     parser_execute.add_argument('--fee', help='the exact {} fee to be paid to miners'.format(config.BTC))
 
@@ -185,8 +185,11 @@ def main():
     parser_getrows.add_argument('--limit', help='number of rows to return', default=100)
     parser_getrows.add_argument('--offset', help='number of rows to skip', default=0)
 
-    execution_info = subparsers.add_parser('execution_info', help='get info about EVM execution TX')
-    execution_info.add_argument('tx_hash', help='tx_hash of the TX')
+    execution_info = subparsers.add_parser('evm_info', help='get info about EVM TX')
+    execution_info.add_argument('--abi', required=True, help='contract ABI')
+    execution_info.add_argument('--debug-output', default=False, action='store_true', help='pretty debug output')
+    execution_info.add_argument('--include-invalid', default=False, action='store_true', help='include invalid transactions')
+    execution_info.add_argument('tx_hash_or_contract_id', help='tx_hash of the TX or contract_id to get a list of all TXs for that contract')
 
     parser_getrunninginfo = subparsers.add_parser('getinfo', help='get the current state of the server')
 
@@ -239,9 +242,60 @@ def main():
                 tx_hash = wallet.send_raw_transaction(signed_tx_hex)
                 logger.info('Hash of transaction (broadcasted): {}'.format(tx_hash))
 
-    elif args.action == 'execution_info':
-        result = util.api('execution_info', {'tx_hash': args.tx_hash})
-        util.json_print(result)
+    elif args.action == 'evm_info':
+        is_txhash = len(args.tx_hash_or_contract_id) == 64
+        results = util.api('get_evm_info', {'tx_hash_or_contract_id': args.tx_hash_or_contract_id, 'abi': args.abi, 'include_invalid': args.include_invalid})
+        if args.debug_output:
+            for result in results:
+                print('=========================================================================')
+                print('tx_hash: %s' % result['tx']['tx_hash'])
+                print('status: %s' % result['execution']['status'])
+                print('contract_id: %s' % result['execution']['contract_id'])
+                print('value: %s' % result['execution']['value'])
+                print('output: %s' % result['execution']['output'])
+                print('data: %s' % result['execution']['data'])
+
+
+                print('----------------------------- EXECUTION INFO ----------------------------')
+
+                if result['is_contract_creation']:
+                    print('created contract: %s' % result['contract']['contract_id'])
+                else:
+                    if not result['call']:
+                        print('unable to decode the data')
+                    else:
+                        print('function_called: %s' % result['call']['function_name'])
+                        print('arguments types: %s' % result['call']['description']['encode_types'])
+                        print('arguments: %s' % result['call']['data'])
+                        print('output types: %s' % result['call']['description']['decode_types'])
+                        print('output: %s' % result['call']['output'])
+
+                STARTGAS_ACTIONS = ['delta balance', 'startgas']
+
+                credits_startgas = list(filter(lambda credit: credit['calling_function'] in STARTGAS_ACTIONS, result['credits']))
+                debits_startgas = list(filter(lambda debit: debit['action'] in STARTGAS_ACTIONS, result['debits']))
+                credits = list(filter(lambda credit: credit['calling_function'] not in STARTGAS_ACTIONS, result['credits']))
+                debits = list(filter(lambda debit: debit['action'] not in STARTGAS_ACTIONS, result['debits']))
+
+                print('-------------------------- GAS DEBITS / CREDITS -------------------------')
+                for debit in debits_startgas:
+                    print(' - DEBIT [GAS];  %s %d %s (%s)' % (debit['address'], debit['quantity'] * -1, debit['asset'], debit['action']))
+                for credit in credits_startgas:
+                    print(' - CREDIT [GAS]; %s %d %s (%s)' % (credit['address'], credit['quantity'], credit['asset'], credit['calling_function']))
+
+                if len(credits) or len(debits):
+                    print('---------------------------- DEBITS / CREDITS ---------------------------')
+
+                for debit in debits:
+                    print(' - DEBIT;  %s %d %s (%s)' % (debit['address'], debit['quantity'] * -1, debit['asset'], debit['action']))
+                for credit in credits:
+                    print(' - CREDIT; %s %d %s (%s)' % (credit['address'], credit['quantity'], credit['asset'], credit['calling_function']))
+        else:
+            if is_txhash:
+                assert len(results) <= 1
+                results = results[0]
+
+            util.json_print(results)
 
     # VIEWING
     elif args.action in ['balances', 'asset', 'wallet', 'pending', 'getinfo', 'getrows']:
