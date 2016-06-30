@@ -34,6 +34,9 @@ def is_valid(address):
 def is_mine(address):
     return rpc('validateaddress', [address])['ismine']
 
+def dump_privkey(address):
+    return rpc('dumpprivkey', [address])
+
 def get_pubkey(address):
     address_infos = rpc('validateaddress', [address])
     if address_infos['isvalid'] and address_infos['ismine']:

@@ -45,6 +45,9 @@ def is_mine(address):
         return False
     return address_info['ismine']
 
+def dump_privkey(address):
+    raise NotImplementedError
+
 def get_pubkey(address):
     address_infos = rpc('validateaddress', [address])
     if address_infos['isvalid'] and address_infos['ismine']:

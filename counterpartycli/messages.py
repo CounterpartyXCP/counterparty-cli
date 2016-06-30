@@ -117,7 +117,8 @@ def common_args(args):
         'multisig_dust_size': args.multisig_dust_size,
         'op_return_value': args.op_return_value,
         'dust_return_pubkey': args.dust_return_pubkey,
-        'disable_utxo_locks': args.disable_utxo_locks
+        'disable_utxo_locks': args.disable_utxo_locks,
+        'p2sh_pretx_txid': args.p2sh_pretx_txid
     }
 
 def prepare_args(args, action):

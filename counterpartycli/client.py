@@ -39,6 +39,7 @@ CONFIG_ARGS = [
     [('--wallet-password',), {'help': 'the password used to communicate with wallet'}],
     [('--wallet-ssl',), {'action': 'store_true', 'default': False, 'help': 'use SSL to connect to wallet (default: false)'}],
     [('--wallet-ssl-verify',), {'action': 'store_true', 'default': False, 'help': 'verify SSL certificate of wallet; disallow use of self‐signed certificates (default: false)'}],
+    [('--wallet-pysign', ), {'default': False, 'action': 'store_true', 'help': 'always use pycoin signing'}],
 
     [('--json-output',), {'action': 'store_true', 'default': False, 'help': 'display result in json format'}],
     [('--unconfirmed',), {'action': 'store_true', 'default': False, 'help': 'allow the spending of unconfirmed transaction outputs'}],
@@ -76,6 +77,7 @@ def main():
     parser_send.add_argument('--source', required=True, help='the source address')
     parser_send.add_argument('--destination', required=True, help='the destination address')
     parser_send.add_argument('--quantity', required=True, help='the quantity of ASSET to send')
+    parser_send.add_argument('--p2sh-pretx-txid', help='pretx txId for p2sh encoding 2nd TX')
     parser_send.add_argument('--asset', required=True, help='the ASSET of which you would like to send QUANTITY')
     parser_send.add_argument('--memo', help='A transaction memo attached to this send')
     parser_send.add_argument('--memo-is-hex', action='store_true', default=False, help='Whether to interpret memo as a hexadecimal value')
@@ -225,24 +227,33 @@ def main():
         if not args.unsigned:
             if script.is_multisig(args.source):
                 logger.info('Multi‐signature transactions are signed and broadcasted manually.')
-            
-            elif input('Sign and broadcast? (y/N) ') == 'y':
+            if script.is_p2sh(args.source):
+                logger.info('P2SH transactions are signed and broadcasted manually.')
+            else:
+                shouldsign = input('Sign and broadcast? (y/N) ')
+                if shouldsign and shouldsign.lower() == 'y':
+                    signed_tx_hex = None
+                    private_key_wif = None
+                    if wallet.is_mine(args.source):
+                        if wallet.is_locked():
+                            passphrase = getpass.getpass('Enter your wallet passhrase: ')
+                            logger.info('Unlocking wallet for 60 (more) seconds.')
+                            wallet.unlock(passphrase)
 
-                if wallet.is_mine(args.source):
-                    if wallet.is_locked():
-                        passphrase = getpass.getpass('Enter your wallet passhrase: ')
-                        logger.info('Unlocking wallet for 60 (more) seconds.')
-                        wallet.unlock(passphrase)
-                    signed_tx_hex = wallet.sign_raw_transaction(unsigned_hex)
-                else:
-                    private_key_wif = input('Source address not in wallet. Please enter the private key in WIF format for {}:'.format(args.source))
-                    if not private_key_wif:
-                        raise TransactionError('invalid private key')
-                    signed_tx_hex = wallet.sign_raw_transaction(unsigned_hex, private_key_wif=private_key_wif)
+                        if args.wallet_pysign:
+                            private_key_wif = wallet.dump_privkey(args.source)
+                        else:
+                            signed_tx_hex = wallet.sign_raw_transaction(unsigned_hex)
 
-                logger.info('Transaction (signed): {}'.format(signed_tx_hex))
-                tx_hash = wallet.send_raw_transaction(signed_tx_hex)
-                logger.info('Hash of transaction (broadcasted): {}'.format(tx_hash))
+                    if not signed_tx_hex:
+                        private_key_wif = private_key_wif or input('Source address not in wallet. Please enter the private key in WIF format for {}:'.format(args.source))
+                        if not private_key_wif:
+                            raise TransactionError('invalid private key')
+                        signed_tx_hex = wallet.sign_raw_transaction(unsigned_hex, private_key_wif=private_key_wif)
+
+                    logger.info('Transaction (signed): {}'.format(signed_tx_hex))
+                    tx_hash = wallet.send_raw_transaction(signed_tx_hex)
+                    logger.info('Hash of transaction (broadcasted): {}'.format(tx_hash))
 
 
     # VIEWING

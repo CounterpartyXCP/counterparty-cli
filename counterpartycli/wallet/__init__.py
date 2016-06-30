@@ -6,14 +6,20 @@ logger = logging.getLogger(__name__)
 import sys
 import json
 import time
+import pprint
 from decimal import Decimal as D
 
 from counterpartycli.wallet import bitcoincore, btcwallet
 from counterpartylib.lib import config, util, exceptions, script
 from counterpartycli.util import api, value_out
 
-from pycoin.tx import Tx, SIGHASH_ALL
-from pycoin.encoding import wif_to_tuple_of_secret_exponent_compressed, public_pair_to_hash160_sec
+import bitcoin as bitcoinlib
+import pycoin
+from pycoin.tx.script import tools as pycoin_tools
+from pycoin import intbytes as pycoin_intbytes
+from pycoin.tx import Tx, SIGHASH_ALL, SIGHASH_NONE, script as pycoin_script
+from pycoin.tx.pay_to import ScriptPayToScript as pycoin_ScriptPayToScript
+from pycoin.encoding import wif_to_tuple_of_secret_exponent_compressed, public_pair_to_hash160_sec, to_bytes_32
 from pycoin.ecdsa import generator_secp256k1, public_pair_for_secret_exponent
 
 class WalletError(Exception):
@@ -32,14 +38,17 @@ def get_btc_balances():
     for address, btc_balance in WALLET().get_btc_balances():
     	yield [address, btc_balance]
 
+
 def pycoin_sign_raw_transaction(tx_hex, private_key_wif):
     for char in private_key_wif:
         if char not in script.b58_digits:
             raise exceptions.TransactionError('invalid private key')
 
     if config.TESTNET:
+        bitcoinlib.SelectParams('testnet')
         allowable_wif_prefixes = [config.PRIVATEKEY_VERSION_TESTNET]
     else:
+        bitcoinlib.SelectParams('mainnet')
         allowable_wif_prefixes = [config.PRIVATEKEY_VERSION_MAINNET]
 
     secret_exponent, compressed = wif_to_tuple_of_secret_exponent_compressed(
@@ -50,9 +59,50 @@ def pycoin_sign_raw_transaction(tx_hex, private_key_wif):
 
     tx = Tx.tx_from_hex(tx_hex)
     for idx, tx_in in enumerate(tx.txs_in):
-        tx.sign_tx_in(hash160_lookup, idx, tx_in.script, hash_type=SIGHASH_ALL)
+        # examine last 23 bytes of the script to determine if it's P2SH
+        tx_out_script = tx_in.script[-23:]
+        is_p2sh = (len(tx_out_script) == 23 and pycoin_intbytes.byte_to_int(tx_out_script[0]) == pycoin_script.opcodes.OP_HASH160
+                  and pycoin_intbytes.byte_to_int(tx_out_script[-1]) == pycoin_script.opcodes.OP_EQUAL)
+
+        # if it's P2SH we need to determine if it's a data P2SH output
+        if is_p2sh:
+            _script = bitcoinlib.core.CScript(tx_in.script)
+            chunks = list(_script)
+
+            # length has to be 3
+            assert len(chunks) == 3
+
+            datachunk = chunks[0]
+            redeem_script = chunks[1]
+            tx_out_script = chunks[2]
+
+            # verify the redeemscript is a data P2SH script
+            _redeem_script = bitcoinlib.core.CScript(redeem_script)
+            _redeem_script_chunks = list(_redeem_script)
+            assert len(_redeem_script_chunks) == 10
+            assert _redeem_script_chunks[0] == bitcoinlib.core.script.OP_HASH160
+            assert _redeem_script_chunks[2] == bitcoinlib.core.script.OP_EQUALVERIFY
+            assert _redeem_script_chunks[4] == bitcoinlib.core.script.OP_CHECKSIGVERIFY
+            assert _redeem_script_chunks[5] == ((idx - 1) or b'')  # quirky bitcoinlib thing, 0 -> b''
+            assert _redeem_script_chunks[6] == bitcoinlib.core.script.OP_DROP
+            assert _redeem_script_chunks[7] == bitcoinlib.core.script.OP_DEPTH
+            assert _redeem_script_chunks[8] == b''  # quirky bitcoinlib thing, 0 -> b''
+            assert _redeem_script_chunks[9] == bitcoinlib.core.script.OP_EQUAL
+
+            # custom signing because pycoin can't sign non-multisig P2SH scripts (code is more or less copy paste from pycoin)
+            _script = pycoin_ScriptPayToScript.from_script(tx_out_script)
+            sign_value = tx.signature_hash(redeem_script, idx, hash_type=SIGHASH_ALL)
+            binary_signature = _script._create_script_signature(secret_exponent, sign_value, SIGHASH_ALL)
+
+            underlying_solution = pycoin_tools.bin_script([binary_signature])
+            solution = underlying_solution + pycoin_tools.bin_script([datachunk]) + pycoin_tools.bin_script([redeem_script])
+
+            tx_in.script = solution
+        else:
+            tx.sign_tx_in(hash160_lookup, idx, tx_in.script, hash_type=SIGHASH_ALL)
 
     return tx.as_hex()
+
 
 def sign_raw_transaction(tx_hex, private_key_wif=None):
     if private_key_wif is None:
@@ -85,6 +135,9 @@ def is_locked():
 
 def unlock(passphrase):
     return WALLET().unlock(passphrase)
+
+def dump_privkey(address):
+    return WALLET().dump_privkey(address)
 
 def wallet_last_block():
     return WALLET().wallet_last_block()
