@@ -6,6 +6,8 @@ import json
 import time
 import requests
 
+from itertools import groupby
+
 from counterpartylib.lib import config
 from counterpartycli.util import wallet_api as rpc
 
@@ -17,10 +19,15 @@ def get_wallet_addresses():
             addresses.append(address)
     return addresses
 
-def get_btc_balances():
+def get_btc_balances_old():
     for group in rpc('listaddressgroupings', []):
         for bunch in group:
             yield bunch[:2]
+
+def get_btc_balances():
+    balances = [(unspent['address'], unspent['amount']) for unspent in rpc('listunspent')]
+    for addr, group in groupby(sorted(balances, key=lambda x: x[0]), key=lambda x: x[0]):
+        yield [addr, sum(map(lambda x: x[1], group))]
 
 def list_unspent():
     return rpc('listunspent', [0, 99999])
@@ -32,7 +39,10 @@ def is_valid(address):
     return rpc('validateaddress', [address])['isvalid']
 
 def is_mine(address):
-    return rpc('validateaddress', [address])['ismine']
+    logging.warning(address)
+    res = rpc('validateaddress', [address])
+    logging.warning(res)
+    return res['ismine']
 
 def get_pubkey(address):
     address_infos = rpc('validateaddress', [address])
@@ -40,13 +50,21 @@ def get_pubkey(address):
         return address_infos['pubkey']
     return None
 
-def get_btc_balance(address):
+def get_btc_balance_old(address):
     for group in rpc('listaddressgroupings', []):
         for bunch in group:
             btc_address, btc_balance = bunch[:2]
             if btc_address == address:
                 return btc_balance
     return 0
+
+def get_btc_balance(address):
+    return sum([unspent['amount'] for unspent in rpc('listunspent') if unspent['address'] == address])
+    #total = 0
+    #for unspent in rpc('listunspent', []):
+    #    if unspent['address'] == address:
+    #        total = total + unspent[amount
+    #return total
 
 def is_locked():
     getinfo = rpc('getinfo', [])
