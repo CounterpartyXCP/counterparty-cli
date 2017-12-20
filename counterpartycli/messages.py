@@ -167,7 +167,10 @@ def prepare_args(args, action):
     if action == 'broadcast':
         args.value = util.value_in(args.value, 'value')
         args.fee_fraction = util.value_in(args.fee_fraction, 'fraction')
-        args.timestamp = int(time.time())
+        if args.timestamp >= 0:
+            args.timestamp = int(args.timestamp)
+        else
+            args.timestamp = int(time.time())
 
     # bet
     if action == 'bet':

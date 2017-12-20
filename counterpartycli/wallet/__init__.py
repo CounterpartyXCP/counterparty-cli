@@ -57,7 +57,7 @@ def pycoin_sign_raw_transaction(tx_hex, private_key_wif):
     hash160 = public_pair_to_hash160_sec(public_pair, compressed)
     hash160_lookup = {hash160: (secret_exponent, public_pair, compressed)}
 
-    tx = Tx.tx_from_hex(tx_hex)
+    tx = Tx.from_hex(tx_hex)
     for idx, tx_in in enumerate(tx.txs_in):
         # examine last 23 bytes of the script to determine if it's P2SH
         tx_out_script = tx_in.script[-23:]
@@ -79,20 +79,21 @@ def pycoin_sign_raw_transaction(tx_hex, private_key_wif):
             # verify the redeemscript is a data P2SH script
             _redeem_script = bitcoinlib.core.CScript(redeem_script)
             _redeem_script_chunks = list(_redeem_script)
-            assert len(_redeem_script_chunks) == 10
-            assert _redeem_script_chunks[0] == bitcoinlib.core.script.OP_HASH160
-            assert _redeem_script_chunks[2] == bitcoinlib.core.script.OP_EQUALVERIFY
-            assert _redeem_script_chunks[4] == bitcoinlib.core.script.OP_CHECKSIGVERIFY
-            assert _redeem_script_chunks[5] == ((idx - 1) or b'')  # quirky bitcoinlib thing, 0 -> b''
-            assert _redeem_script_chunks[6] == bitcoinlib.core.script.OP_DROP
-            assert _redeem_script_chunks[7] == bitcoinlib.core.script.OP_DEPTH
-            assert _redeem_script_chunks[8] == b''  # quirky bitcoinlib thing, 0 -> b''
-            assert _redeem_script_chunks[9] == bitcoinlib.core.script.OP_EQUAL
+
+            assert len(_redeem_script_chunks) == 8
+            assert _redeem_script_chunks[0] == bitcoinlib.core.script.OP_DROP
+            assert _redeem_script_chunks[2] == bitcoinlib.core.script.OP_CHECKSIGVERIFY
+            assert _redeem_script_chunks[3] == idx or _redeem_script_chunks[5] == idx - 1  # quirky bitcoinlib thing, 0 -> b''
+            assert _redeem_script_chunks[4] == bitcoinlib.core.script.OP_DROP
+            assert _redeem_script_chunks[5] == bitcoinlib.core.script.OP_DEPTH
+            assert _redeem_script_chunks[6] == 0  # quirky bitcoinlib thing, 0 -> b''
+            assert _redeem_script_chunks[7] == bitcoinlib.core.script.OP_EQUAL
 
             # custom signing because pycoin can't sign non-multisig P2SH scripts (code is more or less copy paste from pycoin)
             _script = pycoin_ScriptPayToScript.from_script(tx_out_script)
-            sign_value = tx.signature_hash(redeem_script, idx, hash_type=SIGHASH_ALL)
-            binary_signature = _script._create_script_signature(secret_exponent, sign_value, SIGHASH_ALL)
+            def signature_for_hash_type_f(hash_type, script):
+                return tx.signature_hash(script, idx, hash_type)
+            binary_signature = _script._create_script_signature(secret_exponent, signature_for_hash_type_f, SIGHASH_ALL, redeem_script)
 
             underlying_solution = pycoin_tools.bin_script([binary_signature])
             solution = underlying_solution + pycoin_tools.bin_script([datachunk]) + pycoin_tools.bin_script([redeem_script])

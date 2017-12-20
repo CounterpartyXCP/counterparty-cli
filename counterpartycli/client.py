@@ -115,6 +115,8 @@ def main():
     parser_broadcast.add_argument('--text', type=str, required=True, help='the textual part of the broadcast (set to ‘LOCK’ to lock feed)')
     parser_broadcast.add_argument('--value', type=float, default=-1, help='numerical value of the broadcast')
     parser_broadcast.add_argument('--fee-fraction', default=0, help='the fraction of bets on this feed that go to its operator')
+    parser_broadcast.add_argument('--timestamp', default=-1, help='the timestamp for this broadcast')
+    parser_broadcast.add_argument('--p2sh-pretx-txid', help='pretx txId for p2sh encoding 2nd TX')
     parser_broadcast.add_argument('--fee', help='the exact {} fee to be paid to miners'.format(config.BTC))
 
     parser_bet = subparsers.add_parser('bet', help='offer to make a bet on the value of a feed')
