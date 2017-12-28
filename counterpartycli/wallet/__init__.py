@@ -23,14 +23,14 @@ class LockedWalletError(WalletError):
     pass
 
 def WALLET():
-    return sys.modules['counterpartycli.wallet.{}'.format(config.WALLET_NAME)] 
+    return sys.modules['counterpartycli.wallet.{}'.format(config.WALLET_NAME)]
 
 def get_wallet_addresses():
     return WALLET().get_wallet_addresses()
 
 def get_btc_balances():
     for address, btc_balance in WALLET().get_btc_balances():
-    	yield [address, btc_balance]
+        yield [address, btc_balance]
 
 def pycoin_sign_raw_transaction(tx_hex, private_key_wif):
     for char in private_key_wif:
@@ -78,7 +78,7 @@ def list_unspent():
     return WALLET().list_unspent()
 
 def send_raw_transaction(tx_hex):
-	return WALLET().send_raw_transaction(tx_hex)
+    return WALLET().send_raw_transaction(tx_hex)
 
 def is_locked():
     return WALLET().is_locked()
@@ -135,10 +135,10 @@ def asset(asset_name):
         })
     else:
         issuances = api('get_issuances', {
-            'filters': [('asset', '==', asset_name),], 
-            'status': 'valid', 
-            'order_by': 'tx_index', 
-            'order_dir': 'DESC', 
+            'filters': [('asset', '==', asset_name),],
+            'status': 'valid',
+            'order_by': 'tx_index',
+            'order_dir': 'DESC',
         })
         if not issuances:
             raise WalletError('Asset not found')
