@@ -32,12 +32,13 @@ def is_valid(address):
     return rpc('validateaddress', [address])['isvalid']
 
 def is_mine(address):
-    return rpc('validateaddress', [address])['ismine']
+    return rpc('getaddressinfo', [address])['ismine']
 
 def get_pubkey(address):
     address_infos = rpc('validateaddress', [address])
-    if address_infos['isvalid'] and address_infos['ismine']:
-        return address_infos['pubkey']
+    get_address_infos = rpc('getaddressinfo', [address])
+    if address_infos['isvalid'] and get_address_infos['ismine']:
+        return get_address_infos['pubkey']
     return None
 
 def get_btc_balance(address):
